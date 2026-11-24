@@ -1,0 +1,21 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y iverilog
+      - run: pip install numpy matplotlib pytest yowasp-yosys
+      - name: model + RTL tests
+        run: python -m pytest -q tests
+      - name: directed self-checking testbench
+        run: iverilog -g2012 -o directed.vvp rtl/*.v tb/tb_directed.v && vvp directed.vvp | tee directed.log && grep -q "ALL DIRECTED TESTS PASSED" directed.log
+      - name: mutation sanity check (all mutants must be killed)
+        run: python scripts/mutation_check.py
+      - name: synthesis
+        run: python scripts/synth.py
+      - name: quick fault-injection campaign
+        run: python scripts/campaign.py --quick > /dev/null
